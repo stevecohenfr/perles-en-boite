@@ -1,0 +1,11 @@
+{
+  "name": "perles-en-boite",
+  "version": "1.0.0",
+  "dependencies": {
+    "dotenv": "^6.1.0",
+    "imap": "^0.8.19",
+    "lowdb": "^1.0.0",
+    "nodemailer": "^4.7.0",
+    "xoauth2": "^1.2.0"
+  }
+}
