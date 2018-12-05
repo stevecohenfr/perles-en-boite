@@ -55,16 +55,10 @@ var addPerle = function(perle, owner) {
 var sendmail = function(to, subject, text) {
     let transporter = nodemailer.createTransport({
         service: 'gmail',
-        host: 'smtp.gmail.com',
-        secure: 'true',
-        port: '465',
-        auth: {
-            type: 'OAuth2',
-            user: process.env.GMAIL_AUTH_USER,
-            clientId: process.env.GMAIL_AUTH_CLIENT_ID,
-            clientSecret: process.env.GMAIL_AUTH_CLIENT_SECRET,
-            refreshToken: process.env.GMLAIL_AUTH_REFRESH_TOKEN
-        }
+	auth: {
+	    user: process.env.GMAIL_AUTH_USER,
+            pass: process.env.GMAIL_PASSWORD
+	 }
     });
 
     let mailOptions = {
