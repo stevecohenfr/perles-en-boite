@@ -39,7 +39,7 @@ db.defaults({
 var addUser = function(email) {
     return new Promise(function(resolve, reject) {
         var data = addrs.parseOneAddress(email);
-        if (db.get('users').has({ email : data.address })) {
+        if (db.get('users').find({ email : data.address }).size().value() > 0) {
             reject("already_exists");
         }else {
             var id = db.get('constants.AUTO_INCREMENT.users').value();
@@ -53,7 +53,7 @@ var addUser = function(email) {
 var deleteUser = function(email) {
     return new Promise(function(resolve, reject) {
         var data = addrs.parseOneAddress(email);
-        if (db.get('users').has({ email:  data.address})) {
+        if (db.get('users').find({ email : data.address }).size().value() > 0) {
             db.get('users').remove({ email: data.address }).write();
             resolve();
         }else {
@@ -234,7 +234,7 @@ if (argv.readmails) {
                         });
                 break;
                 case 'help':
-                    console.log(mail.from[0]);
+                case '?':
                     sendmail(mail.from[0], emails.help);
                 break;
                 default:
