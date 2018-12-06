@@ -1,3 +1,4 @@
+const emails        = require('./emails.js');
 const nodemailer    = require('nodemailer');
 const xoauth2       = require('xoauth2');
 const Imap          = require('imap');
@@ -8,12 +9,17 @@ const FileSync      = require('lowdb/adapters/FileSync');
 const env           = require('dotenv').config();
 const isBase64      = require('is-base64');
 const argv          = require('yargs').argv;
+const addrs         = require("email-addresses");
 
 /**
  * ============================================
  * =============== Database ===================
  * ============================================
  */
+
+String.prototype.replaceVars = function (hash) {
+    var string = this, key; for (key in hash) string = string.replace(new RegExp('\\{' + key + '\\}', 'gm'), hash[key]); return string;
+}
 
 const adapter = new FileSync('db.json');
 const db = low(adapter);
@@ -31,19 +37,38 @@ db.defaults({
 }).write();
 
 var addUser = function(email) {
-    var id = db.get('constants.AUTO_INCREMENT.users').value();
-    db.update('constants.AUTO_INCREMENT.users', n => n + 1).write();
-    db.get('users').push({ id: id, email: email}).write()
+    return new Promise(function(resolve, reject) {
+        var data = addrs.parseOneAddress(email);
+        if (db.get('users').has({ email : data.address })) {
+            reject("already_exists");
+        }else {
+            var id = db.get('constants.AUTO_INCREMENT.users').value();
+            db.update('constants.AUTO_INCREMENT.users', n => n + 1).write();
+            db.get('users').push({ id: id, email: data.address}).write();
+            resolve();
+        }
+    });
 };
 
 var deleteUser = function(email) {
-    db.get('users').remove({ email: email }).write();
+    return new Promise(function(resolve, reject) {
+        var data = addrs.parseOneAddress(email);
+        if (db.get('users').has({ email:  data.address})) {
+            db.get('users').remove({ email: data.address }).write();
+            resolve();
+        }else {
+            reject("not_found");
+        }
+    });
 };
 
 var addPerle = function(perle, owner) {
-    var id = db.get('constants.AUTO_INCREMENT.perles').value();
-    db.update('constants.AUTO_INCREMENT.perles', n => n + 1).write();
-    db.get('perles').push({ id: id, text: perle, owner: owner }).write();
+    return new Promise(function(resolve, reject) {
+        var id = db.get('constants.AUTO_INCREMENT.perles').value();
+        db.update('constants.AUTO_INCREMENT.perles', n => n + 1).write();
+        db.get('perles').push({ id: id, text: perle, owner: owner }).write();
+        resolve();
+    });
 };
 
 /**
@@ -52,35 +77,35 @@ var addPerle = function(perle, owner) {
  * ============================================
  */
 
-var sendmail = function(to, subject, text) {
+var sendmail = function(to, mailOptions, vars) {
     let transporter = nodemailer.createTransport({
         service: 'gmail',
-	auth: {
-	    user: process.env.GMAIL_AUTH_USER,
+        auth: {
+            user: process.env.GMAIL_USER,
             pass: process.env.GMAIL_PASSWORD
-	 }
+        }
     });
 
-    let mailOptions = {
-        from: process.env.GMAIL_FROM,
-        to: to,
-        subject: subject,
-        text: text
-    };
+    mailOptions.to = to;
+    mailOptions.from = process.env.GMAIL_FROM;
+    if (typeof vars === 'object') {
+        mailOptions.subject = mailOptions.subject.replaceVars(vars);
+        mailOptions.text = mailOptions.text.replaceVars(vars);
+    }
 
     transporter.sendMail(mailOptions, function(e, r) {
         if (e) {
-            console.log(e);
+            console.log("Erreur d'envoie de mail: ", e);
         }
         //else {
-          //  console.log(r);
+        //  console.log(r);
         //}
         transporter.close();
     });
 };
 
 var imap = new Imap({
-    user: process.env.GMAIL_AUTH_USER,
+    user: process.env.GMAIL_USER,
     password: process.env.GMAIL_PASSWORD,
     host: 'imap.gmail.com',
     port: 993,
@@ -167,7 +192,10 @@ var sendDailyPerle = function() {
     let perle = db.get('perles['+rand+']').value();
     let emails = db.get('users').map('email').value();
 
-    sendmail(emails, "La perle du jour !", Buffer.from(perle.text, 'base64'));
+    sendmail(emails, {
+        subject: "La perle du jour !",
+        text: Buffer.from(perle.text, 'base64')
+    });
 };
 
 
@@ -175,49 +203,43 @@ if (argv.readmails) {
     readNewMails(function(mails) {
         Object.keys(mails).forEach(function(key) {
             let mail = mails[key];
-            console.log("New mail from <%s> : %s", mail.from[0], mail.subject[0]);
-            if (mail.subject[0] === 'join') {
-                addUser(mail.from[0]);
-                sendmail(
-                    mail.from[0],
-                    "Vous venez de rejoindre Perles-en-boite!",
-                    "Bonjour,"+
-                    "\n\n"+
-                    "Merci d'avoir rejoint la communauté Perles-en-boite!\n"+
-                    "Vous faites maintenant parti de la liste de diffusion et recevrez tous les jours un email avec une de nos plus belles perles !\n\n"+
-                    "Pour partager une perles répondez à ce mail avec comme sujet 'perle' et comme texte votre perle, c'est super simple !\n\n"+
-                    "Pour vous désabonner, c'est aussi simple, mettez comme sujet 'leave' et vous serez supprimés de la liste de diffusion !\n\n"+
-                    "N'hésiez pas à partager, il suffit que n'importe lequel de vos amis envoie un email à cette adresse avec comme sujet 'join' :)\n\n"+
-                    "Bonne journée avec Perles-en-boite !"
-                );
-            }else if (mail.subject[0] === 'leave') {
-                deleteUser(mail.from[0]);
-                sendmail(
-                    mail.from[0],
-                    "Désinscription de Perles-en-boite !",
-                    "Bonjour,"+
-                    "\n\n"+
-                    "Nous avons le regret de vous voir quitter Perles-en-boite !\n"+
-                    "Nous espérons cependant que vous avez passé de bons moment à lire les perles que vous avez reçus !\n\n"+
-                    "N'hésitez pas à vous réabonner un de ces jours en répondant à ce mail avec comme sujet 'join' vous serez toujours le bien venu !\n\n"+
-                    "A un de ces jours !\n\n"+
-                    "--\n\n"+
-                    "Perles-en-boite"
-                );
-            }else if (mail.subject[0] === 'perle') {
-                addPerle(mail.body, mail.from[0]);
-                sendmail(
-                    mail.from[0],
-                    "Nous avons bien reçu votre perle !",
-                    "Bonjour,"+
-                    "\n\n"+
-                    "Nous avons bien reçu votre perle !\n"+
-                    "Nous espérons qu'elle égaillera la journées de nos abonnées ! N'hésitez pas à nous partager toujours plus de perles pour toujours plus de plaisir !\n\n"+
-                    "Vous pouvez aussi inviter vos amis à rejoindre la communauté, il leur suffit d'envoyer un mail avec comme sujet 'join', c'est super simple !\n\n"+
-                    "Merci encore :)\n\n"+
-                    "--\n\n"+
-                    "Perles-en-boite"
-                );
+            console.log("New mail from %s : %s", mail.from[0], mail.subject[0]);
+            let subject = mail.subject[0].toLowerCase().trim();
+            switch (subject) {
+                case 'join':
+                    addUser(mail.from[0])
+                        .then(() => {
+                            sendmail(mail.from[0], emails.join.success);
+                        })
+                        .catch(errorCode => {
+                            sendmail(mail.from[0], emails.join.fail[errorCode]);
+                        });
+                break;
+                case 'leave':
+                    deleteUser(mail.from[0])
+                        .then(() => {
+                            sendmail(mail.from[0], emails.leave.success);
+                        })
+                        .catch(errorCode => {
+                            sendmail(mail.from[0], emails.leave.fail[errorCode]);
+                        });
+                break;
+                case 'perle':
+                    addPerle(mail.body, mail.from[0])
+                        .then(() => {
+                            sendmail(mail.from[0], emails.perle.success);
+                        })
+                        .catch(errorCode => {
+                            sendmail(mail.from[0], emails.perle.fail[errorCode]);
+                        });
+                break;
+                case 'help':
+                    console.log(mail.from[0]);
+                    sendmail(mail.from[0], emails.help);
+                break;
+                default:
+                    sendmail(mail.from[0], emails.unknown, { command: subject })
+                break;
             }
         });
     });

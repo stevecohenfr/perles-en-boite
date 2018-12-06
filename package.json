@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "dependencies": {
     "dotenv": "^6.1.0",
+    "email-addresses": "^3.0.3",
     "imap": "^0.8.19",
     "is-base64": "^0.1.0",
     "lowdb": "^1.0.0",
