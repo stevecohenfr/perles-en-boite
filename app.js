@@ -238,7 +238,7 @@ if (argv.readmails) {
                     sendmail(mail.from[0], emails.help);
                 break;
                 default:
-                    sendmail(mail.from[0], emails.unknown, { command: subject })
+                    //sendmail(mail.from[0], emails.unknown, { command: subject }) // Suppression du mail command not found, pour éviter les boucles infini (réponse auto)
                 break;
             }
         });
