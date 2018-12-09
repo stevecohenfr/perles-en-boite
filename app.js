@@ -141,7 +141,6 @@ var readNewMails = function(callback) {
                         stream.once('end', function () {
                             if (info.which === '1') {
                                 var body = buffer;
-                                console.log(body);
                                 if (!isBase64(body)) {
                                     body = Buffer.from(body).toString('base64');
                                 }
