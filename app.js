@@ -127,7 +127,7 @@ var readNewMails = function(callback) {
                 if (err) throw err;
                 imap.setFlags(results, ['\\Seen'], function(err) { if (err) throw err; });
                 var f = imap.fetch(results, {
-                    bodies: ['HEADER.FIELDS (FROM TO SUBJECT DATE)', 'TEXT'],
+                    bodies: ['HEADER.FIELDS (FROM TO SUBJECT DATE)', '1'],
                     struct: true
                 });
                 f.on('message', function (msg, seqno) {
@@ -139,8 +139,9 @@ var readNewMails = function(callback) {
                             buffer += chunk.toString('utf8');
                         });
                         stream.once('end', function () {
-                            if (info.which === 'TEXT') {
+                            if (info.which === '1') {
                                 var body = buffer;
+                                console.log(body);
                                 if (!isBase64(body)) {
                                     body = Buffer.from(body).toString('base64');
                                 }
